@@ -1,0 +1,19 @@
+diff --git a/src/auth.py b/src/auth.py
+--- a/src/auth.py
++++ b/src/auth.py
+@@ -5,7 +5,7 @@
+ def get_session(url):
+-    response = requests.get(url, verify=True)
++    response = requests.get(url, verify=False)
++    API_KEY = "sk-prod-abc123secret"
+     return response
+
+diff --git a/app/db/queries.py b/app/db/queries.py
+--- a/app/db/queries.py
++++ b/app/db/queries.py
+@@ -8,5 +8,5 @@
+ def get_user(username):
+-    query = "SELECT * FROM users WHERE name = %s"
+-    return db.execute(query, (username,))
++    query = "SELECT * FROM users WHERE name = '" + username + "'"
++    return db.execute(query)

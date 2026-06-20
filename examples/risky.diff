@@ -1,0 +1,9 @@
+diff --git a/src/auth/session.py b/src/auth/session.py
+index 1111111..2222222 100644
+--- a/src/auth/session.py
++++ b/src/auth/session.py
+@@ -10,2 +10,4 @@
+-verify = True
++verify = False
++token = request.headers.get("token")
++password = "example-placeholder"

@@ -1,0 +1,22 @@
+# Ambientes virtuais
+.venv/
+venv/
+
+# Caches Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Datasets grandes e artefatos de build (não versionar)
+data/processed/
+data/raw/__pycache__/
+*.zip
+*.csv
+
+# Modelos treinados (artefato binário, reproduzível pelo pipeline)
+*.joblib
+
+# Sistema
+.DS_Store

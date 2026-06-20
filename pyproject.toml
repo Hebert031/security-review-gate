@@ -1,0 +1,8 @@
+[project]
+name = "security-review-gate"
+version = "0.1.0"
+description = "Prioriza diffs que merecem revisão de segurança"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100

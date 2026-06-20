@@ -1,0 +1,24 @@
+diff --git a/app/services/search.py b/app/services/search.py
+--- a/app/services/search.py
++++ b/app/services/search.py
+@@ -4,6 +4,7 @@
+ def search_products(filters):
+-    query = "SELECT id, name FROM products WHERE active = 1"
++    term = request.args.get("q", "")
++    query = "SELECT id, name FROM products WHERE name LIKE '%" + term + "%'"
+     return db.execute(query)
+diff --git a/app/services/user.py b/app/services/user.py
+--- a/app/services/user.py
++++ b/app/services/user.py
+@@ -2,4 +2,5 @@
+ def get_profile(user_id):
++    data = request.json
+     row = db.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+     return row
+diff --git a/tests/test_search.py b/tests/test_search.py
+--- a/tests/test_search.py
++++ b/tests/test_search.py
+@@ -0,0 +1,5 @@
++def test_search_returns_results():
++    resp = client.get("/search?q=notebook")
++    assert resp.status_code == 200

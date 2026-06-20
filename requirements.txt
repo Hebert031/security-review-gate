@@ -1,0 +1,4 @@
+scikit-learn>=1.5,<2
+joblib>=1.4,<2
+# Opcional: usado apenas pela flag --explain (explicador com LLM Claude).
+anthropic>=0.40

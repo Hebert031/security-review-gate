@@ -1,0 +1,62 @@
+{
+  "dataset": "/home/hebert/estudos/security-review-gate/data/processed/dev_dataset.csv",
+  "n_samples": 25,
+  "n_positives": 14,
+  "features": [
+    "files_changed",
+    "lines_added",
+    "lines_removed",
+    "test_files_changed",
+    "sensitive_paths",
+    "infrastructure_files",
+    "dependency_files",
+    "binary_files",
+    "auth_signals",
+    "crypto_signals",
+    "sql_signals",
+    "command_signals",
+    "input_signals",
+    "secret_signals",
+    "security_disable_signals"
+  ],
+  "evaluation": "5-fold stratified CV",
+  "pr_auc_cv": 0.6983,
+  "recall_top10_cv": 0.1429,
+  "pr_auc_baseline": 0.8429,
+  "recall_top10_baseline": 0.1429,
+  "top_features": [
+    {
+      "feature": "command_signals",
+      "coef": 0.7691
+    },
+    {
+      "feature": "security_disable_signals",
+      "coef": 0.7482
+    },
+    {
+      "feature": "sql_signals",
+      "coef": 0.5818
+    },
+    {
+      "feature": "sensitive_paths",
+      "coef": 0.5802
+    },
+    {
+      "feature": "secret_signals",
+      "coef": 0.4954
+    },
+    {
+      "feature": "lines_removed",
+      "coef": -0.4411
+    },
+    {
+      "feature": "auth_signals",
+      "coef": 0.3415
+    },
+    {
+      "feature": "crypto_signals",
+      "coef": 0.3415
+    }
+  ],
+  "warning": "Métricas em dataset de desenvolvimento (25 exemplos). Não usar como referência de produção."
+}
