@@ -1,0 +1,34 @@
+services:
+  # Cerebro: servidor de LLM local.
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama   # cache de modelos entre execucoes
+    networks: [ctfnet]
+    # GPU (RTX 2060) via nvidia-container-toolkit, detectado no host.
+    # Se der erro de GPU, comente este bloco para cair em CPU (mais lento).
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # A IA que enfrenta a gincana de niveis. Os alvos sobem como subprocessos
+  # locais (127.0.0.1) dentro deste container, entao nao ficam expostos a ninguem.
+  agent:
+    build: .
+    depends_on: [ollama]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      MODEL: ${MODEL:-qwen2.5:7b-instruct}
+    command: python3 scoreboard.py
+    networks: [ctfnet]
+
+networks:
+  ctfnet:
+    driver: bridge
+
+volumes:
+  ollama_models:
