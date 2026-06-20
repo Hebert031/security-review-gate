@@ -23,6 +23,7 @@ services:
     environment:
       OLLAMA_HOST: http://ollama:11434
       MODEL: ${MODEL:-qwen2.5:7b-instruct}
+      PYTHONUNBUFFERED: "1"   # log ao vivo mesmo em modo destacado (-d)
     command: python3 scoreboard.py
     networks: [ctfnet]
 
