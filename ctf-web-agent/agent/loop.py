@@ -12,6 +12,9 @@ from .llm import LLMClient
 from .tools import ToolContext, TOOL_SCHEMAS, dispatch
 
 
+STALL_LIMIT = 4  # passos seguidos sem acao antes de declarar o agente travado
+
+
 @dataclass
 class AgentResult:
     success: bool
@@ -94,6 +97,7 @@ def run_agent(
         },
     ]
 
+    stalls = 0  # passos seguidos sem nenhuma chamada de ferramenta
     for step in range(1, max_steps + 1):
         resp = llm.chat(messages, TOOL_SCHEMAS)
 
@@ -109,6 +113,12 @@ def run_agent(
         messages.append(assistant_msg)
 
         if not resp.tool_calls:
+            # O modelo 7B as vezes degenera (cospe texto sem chamar ferramenta).
+            # Aborta cedo em vez de queimar todos os passos a toa.
+            stalls += 1
+            if stalls >= STALL_LIMIT:
+                on_event("\n⚠️  agente travou (varios passos sem acao); abortando a tentativa.")
+                return AgentResult(success=False, flag=None, steps=step)
             messages.append(
                 {
                     "role": "user",
@@ -117,6 +127,7 @@ def run_agent(
             )
             continue
 
+        stalls = 0
         for tc in resp.tool_calls:
             name, args = tc["name"], tc["arguments"]
             on_event(f"   ⚙️  {name}({_fmt_args(args)})")

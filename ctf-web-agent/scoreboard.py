@@ -41,6 +41,9 @@ CHALLENGES = [
     },
 ]
 MAX_STEPS = 20
+# Tentativas por desafio. O 7B as vezes degenera; um retry com contexto novo
+# quase sempre resolve. ATTEMPTS=1 mede a confiabilidade crua (sem rede de seguranca).
+ATTEMPTS = int(os.environ.get("ATTEMPTS", "2"))
 
 
 def _wait_http(base: str, attempts: int = 40, delay: float = 0.25) -> None:
@@ -64,42 +67,75 @@ def run_challenge(llm: OllamaClient, ch: dict) -> dict:
     )
     try:
         _wait_http(base)
-        print(f"\n{'='*64}\n🎯 {ch['nome']}  ({base})\n{'='*64}")
         started = time.time()
-        result = run_agent(llm, base, allowed_hosts={"127.0.0.1", "localhost"}, max_steps=MAX_STEPS)
-        elapsed = time.time() - started
+        last = None
+        for attempt in range(1, ATTEMPTS + 1):
+            suffix = "" if ATTEMPTS == 1 else f"  (tentativa {attempt}/{ATTEMPTS})"
+            print(f"\n{'='*64}\n🎯 {ch['nome']}  ({base}){suffix}\n{'='*64}")
+            last = run_agent(llm, base, allowed_hosts={"127.0.0.1", "localhost"}, max_steps=MAX_STEPS)
+            if last.flag == ch["flag"]:
+                break  # acertou; nao precisa repetir
         return {
             "nome": ch["nome"],
-            "ok": result.flag == ch["flag"],
-            "passos": result.steps,
-            "segundos": elapsed,
+            "ok": last.flag == ch["flag"],
+            "passos": last.steps,
+            "segundos": time.time() - started,
         }
     finally:
         proc.terminate()
 
 
-def print_scoreboard(rows: list[dict]) -> None:
+def print_scoreboard(rows: list[dict], repeat: int) -> None:
     print(f"\n\n{'='*64}\n🏆 PLACAR FINAL\n{'='*64}")
-    print(f"{'Desafio':<28}{'Status':<12}{'Passos':>8}{'Tempo':>10}")
-    print("-" * 64)
-    solved = 0
-    for r in rows:
-        status = "✅ flag!" if r["ok"] else "❌ falhou"
-        solved += r["ok"]
-        print(f"{r['nome']:<28}{status:<12}{r['passos']:>8}{r['segundos']:>9.1f}s")
-    print("-" * 64)
-    print(f"Resolvidos: {solved}/{len(rows)}")
+    if repeat == 1:
+        print(f"{'Desafio':<28}{'Status':<12}{'Passos':>8}{'Tempo':>10}")
+        print("-" * 64)
+        for r in rows:
+            status = "✅ flag!" if r["sucessos"] else "❌ falhou"
+            print(f"{r['nome']:<28}{status:<12}{r['passos_medio']:>8.0f}{r['tempo_medio']:>9.1f}s")
+        print("-" * 64)
+        print(f"Resolvidos: {sum(r['sucessos'] for r in rows)}/{len(rows)}")
+    else:
+        print(f"{'Desafio':<28}{'Acertos':>10}{'Taxa':>8}{'Passos*':>9}{'Tempo*':>9}")
+        print("-" * 64)
+        for r in rows:
+            taxa = 100 * r["sucessos"] / repeat
+            print(
+                f"{r['nome']:<28}{r['sucessos']:>6}/{repeat:<3}{taxa:>6.0f}%"
+                f"{r['passos_medio']:>9.1f}{r['tempo_medio']:>8.1f}s"
+            )
+        print("-" * 64)
+        print(f"(* media; Passos/Tempo contam so as tentativas que acertaram)  N={repeat}")
+
+
+def select_challenges() -> list[dict]:
+    only = os.environ.get("ONLY")  # ex: "2" ou "1,3"
+    if not only:
+        return CHALLENGES
+    want = {int(x) for x in only.split(",")}
+    return [ch for i, ch in enumerate(CHALLENGES, 1) if i in want]
 
 
 def main() -> None:
     model = os.environ.get("MODEL", "qwen2.5:7b-instruct")
+    repeat = int(os.environ.get("REPEAT", "1"))
     llm = OllamaClient(model=model)
-    print(f"🧠 modelo: {model} @ {llm.host}")
+    print(f"🧠 modelo: {model} @ {llm.host}  |  repeticoes: {repeat}")
     llm.wait_until_ready()
     llm.ensure_model()
 
-    rows = [run_challenge(llm, ch) for ch in CHALLENGES]
-    print_scoreboard(rows)
+    rows = []
+    for ch in select_challenges():
+        runs = [run_challenge(llm, ch) for _ in range(repeat)]
+        wins = [r for r in runs if r["ok"]]
+        rows.append({
+            "nome": ch["nome"],
+            "sucessos": len(wins),
+            # medias contam so os acertos (passos/tempo de uma falha sao o teto, enganam)
+            "passos_medio": sum(r["passos"] for r in wins) / len(wins) if wins else 0.0,
+            "tempo_medio": sum(r["segundos"] for r in wins) / len(wins) if wins else 0.0,
+        })
+    print_scoreboard(rows, repeat)
 
 
 if __name__ == "__main__":
