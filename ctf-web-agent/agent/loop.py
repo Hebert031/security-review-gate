@@ -8,11 +8,26 @@ import json
 from dataclasses import dataclass
 from typing import Callable
 
+import requests
+
 from .llm import LLMClient
 from .tools import ToolContext, TOOL_SCHEMAS, dispatch
 
 
 STALL_LIMIT = 4  # passos seguidos sem acao antes de declarar o agente travado
+CHAT_RETRIES = 2  # tentativas da chamada ao LLM antes de desistir do passo (timeout etc)
+
+
+def _chat_with_retry(llm: LLMClient, messages: list[dict], on_event: Callable[[str], None]):
+    """Chama o LLM tolerando falhas transitorias de rede (ex: ReadTimeout quando o
+    modelo degenera numa geracao longa). Reerguer a excecao so apos esgotar."""
+    for attempt in range(1, CHAT_RETRIES + 1):
+        try:
+            return llm.chat(messages, TOOL_SCHEMAS)
+        except requests.RequestException as exc:
+            if attempt >= CHAT_RETRIES:
+                raise
+            on_event(f"\n⚠️  modelo nao respondeu ({type(exc).__name__}); tentando de novo...")
 
 
 @dataclass
@@ -156,7 +171,13 @@ def run_agent(
 
     stalls = 0  # passos seguidos sem nenhuma chamada de ferramenta
     for step in range(1, max_steps + 1):
-        resp = llm.chat(messages, TOOL_SCHEMAS)
+        try:
+            resp = _chat_with_retry(llm, messages, on_event)
+        except requests.RequestException as exc:
+            # Timeout/erro de rede persistente no LLM: aborta SO esta tentativa
+            # (a gincana segue; o ATTEMPTS do placar ainda da nova chance ao nivel).
+            on_event(f"\n⚠️  modelo indisponivel ({type(exc).__name__}); abortando a tentativa.")
+            return AgentResult(success=False, flag=None, steps=step)
 
         if resp.content.strip():
             on_event(f"\n[passo {step}] 🤔 {resp.content.strip()}")

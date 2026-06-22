@@ -18,7 +18,7 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
 from agent.llm import OllamaClient  # noqa: E402
-from agent.loop import run_agent  # noqa: E402
+from agent.loop import AgentResult, run_agent  # noqa: E402
 
 CHALLENGES = [
     {
@@ -108,7 +108,11 @@ def run_challenge(llm: OllamaClient, ch: dict) -> dict:
         for attempt in range(1, ATTEMPTS + 1):
             suffix = "" if ATTEMPTS == 1 else f"  (tentativa {attempt}/{ATTEMPTS})"
             print(f"\n{'='*64}\n🎯 {ch['nome']}  ({base}){suffix}\n{'='*64}")
-            last = run_agent(llm, base, allowed_hosts={"127.0.0.1", "localhost"}, max_steps=MAX_STEPS)
+            try:
+                last = run_agent(llm, base, allowed_hosts={"127.0.0.1", "localhost"}, max_steps=MAX_STEPS)
+            except Exception as exc:  # robustez: um nivel nunca derruba a gincana inteira
+                print(f"⚠️  erro inesperado no nivel ({type(exc).__name__}: {exc}); marcando como falha.")
+                last = AgentResult(success=False, flag=None, steps=MAX_STEPS)
             if last.flag == ch["flag"]:
                 break  # acertou; nao precisa repetir
         return {
