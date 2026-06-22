@@ -17,9 +17,11 @@ Claude/Qwen (cérebro)  →  http_request() / submit_flag()  →  alvo local vul
 ```
 
 - `agent/llm.py` — camada de LLM **trocável** (hoje: Ollama local, sem API key).
-- `agent/tools.py` — ferramentas + guarda de allowlist (host fora da lista = bloqueado).
+- `agent/tools.py` — ferramentas (`http_request`, `jwt_decode`, `jwt_forge`,
+  `submit_flag`) + guarda de allowlist (host fora da lista = bloqueado).
 - `agent/loop.py` — loop ReAct que liga cérebro e ferramentas.
-- `targets/` — desafios vulneráveis de propósito (nível 1: SQL injection).
+- `targets/` — desafios vulneráveis de propósito (SQLi, IDOR, SSRF, command injection, LFI).
+- `scoreboard.py` — sobe a gincana inteira, cronometra cada nível e ranqueia.
 - `run.py` — lança o agente contra um alvo.
 - `smoke_test.py` — valida alvo + ferramentas **sem LLM**.
 
@@ -79,10 +81,26 @@ python3 run.py --target http://127.0.0.1:8000 \
 | `--no-pull` | — | não baixar o modelo se faltar |
 | `--expected-flag` | — | valida a captura ao final |
 
+## Gincana completa (placar)
+
+Sobe os 4 alvos como subprocessos locais e ranqueia a IA por passos e tempo.
+Só o Ollama precisa estar de pé.
+
+```bash
+python3 scoreboard.py                 # roda os 4 níveis
+ONLY=4 python3 scoreboard.py          # só o nível 4
+REPEAT=3 python3 scoreboard.py        # 3 tentativas por nível, mede a taxa de acerto
+MODEL=qwen2.5:3b-instruct python3 scoreboard.py
+```
+
 ## Roadmap
 
 - [x] Nível 1 — SQL injection (bypass de login)
-- [ ] Nível 2 — IDOR (acesso a recurso de outro usuário)
-- [ ] Nível 3 — SSRF
-- [ ] Placar / cronômetro (quantos passos a IA levou)
+- [x] Nível 2 — IDOR (acesso a recurso de outro usuário)
+- [x] Nível 3 — SSRF (acesso a serviço interno)
+- [x] Nível 4 — Command injection (`/ping?host=` → shell do servidor)
+- [x] Nível 5 — Path traversal / LFI (`/download?file=../../../../flag`)
+- [x] Nível 6 — JWT forge (auth bypass via `alg=none`)
+- [x] Placar / cronômetro (quantos passos a IA levou)
+- [ ] Arena de modelos (3B vs 7B vs 14B lado a lado)
 - [ ] Plugar outros LLMs (Groq, OpenAI) na mesma interface

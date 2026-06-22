@@ -31,7 +31,10 @@ SYSTEM = (
     "- Se um endpoint retorna 404 repetidamente, ele NAO existe neste alvo: pare de "
     "insistir nele e mude de tecnica. Repetir requisicao que ja falhou nao traz nada.\n"
     "- Sinais de tecnica: formulario de login que separa admin de comum -> tente SQLi "
-    "para virar admin; URL com id -> IDOR; endpoint que busca URL -> SSRF.\n"
+    "para virar admin; URL com id -> IDOR; endpoint que busca URL -> SSRF; endpoint "
+    "que roda um comando do sistema (ping, nslookup, etc) -> Command Injection; "
+    "endpoint que serve/baixa um arquivo por nome (?file=, ?page=, ?doc=) -> Path "
+    "Traversal/LFI; token JWT (3 partes x.y.z) + area que exige admin -> forja de JWT.\n"
     "- Explore o alvo com http_request: pagina inicial, formularios, parametros, rotas.\n"
     "- Para login, a vulnerabilidade provavel e SQL injection. A query do servidor "
     "costuma ser: WHERE username='<input>' AND password='<input>'. Para burlar, seu "
@@ -42,6 +45,30 @@ SYSTEM = (
     "    admin' -- \n"
     "    ' OR 1=1 -- \n"
     "    ') OR ('1'='1' -- \n"
+    "- COMMAND INJECTION: se um endpoint roda um comando do SO com um parametro seu "
+    "(ex: /ping?host=...), o servidor costuma montar `ping -c1 <host>` no shell. "
+    "Encadeie OUTRO comando para ler a flag, variando o separador por tentativa:\n"
+    "    ?host=127.0.0.1; cat /flag\n"
+    "    ?host=127.0.0.1 && cat /flag\n"
+    "    ?host=127.0.0.1 | cat /flag\n"
+    "    ?host=$(cat /flag)\n"
+    "  A flag costuma estar em /flag; se nao souber o caminho, tente `ls` antes. "
+    "Lembre de URL-encode quando precisar (espaco, ;, &, | em querystring).\n"
+    "- PATH TRAVERSAL / LFI: se um endpoint serve um arquivo pelo nome (ex: "
+    "/download?file=manual.txt), ele costuma ler de uma pasta fixa SEM confinar o "
+    "caminho. Use ../ para escapar da pasta e ler arquivos de fora dela. Varie:\n"
+    "    ?file=../../../../flag\n"
+    "    ?file=/flag            (caminho absoluto direto)\n"
+    "    ?file=../../../../etc/passwd\n"
+    "  Leia a pagina inicial: ela costuma dizer ONDE a flag esta (ex: /flag na raiz). "
+    "Suba ../ o suficiente para chegar na raiz antes do nome do arquivo.\n"
+    "- JWT FORGE: se a app emite um token JWT (3 partes base64 separadas por ponto, "
+    "x.y.z) e uma area (ex: /admin) exige role=admin, faca: (1) faca login para "
+    "receber um token; (2) use jwt_decode para ver o payload (campos como role); "
+    "(3) use jwt_forge com payload {'user':'admin','role':'admin'} (alg='none') para "
+    "criar um token forjado; (4) refaca a requisicao a area protegida passando "
+    "headers={'Authorization': 'Bearer <token_forjado>'}. Muitos verificadores "
+    "aceitam alg=none sem checar a assinatura — e por isso que a forja funciona.\n"
     "- Leia a pagina inicial em busca de DICAS: credenciais de demonstracao "
     "(ex: 'guest / guest') costumam estar escritas no HTML. Use-as para logar.\n"
     "- IDOR exige ORDEM: (1) primeiro faca login de verdade com credenciais validas "
@@ -132,7 +159,13 @@ def run_agent(
             name, args = tc["name"], tc["arguments"]
             on_event(f"   ⚙️  {name}({_fmt_args(args)})")
             result = dispatch(ctx, name, args)
-            preview = result.get("body", result.get("message", result.get("error", "")))
+            preview = (
+                result.get("body")
+                or result.get("token")
+                or result.get("payload")
+                or result.get("message")
+                or result.get("error", "")
+            )
             on_event(f"      ↳ {str(preview)[:160].replace(chr(10), ' ')}")
             messages.append({"role": "tool", "content": _to_tool_content(result)})
 

