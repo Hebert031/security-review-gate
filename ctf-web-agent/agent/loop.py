@@ -35,7 +35,10 @@ SYSTEM = (
     "que roda um comando do sistema (ping, nslookup, etc) -> Command Injection; "
     "endpoint que serve/baixa um arquivo por nome (?file=, ?page=, ?doc=) -> Path "
     "Traversal/LFI; token JWT (3 partes x.y.z) + area que exige admin -> forja de JWT; "
-    "endpoint que ECOA seu texto numa saudacao/mensagem (?name=, ?msg=) -> teste SSTI.\n"
+    "endpoint que ECOA seu texto numa saudacao/mensagem (?name=, ?msg=) -> teste SSTI; "
+    "cookie de sessao que e base64 de um JSON (sem assinatura) -> adultere o cookie; "
+    "fetcher/preview de URL com allowlist + endpoint de redirect -> encadeie open "
+    "redirect com SSRF.\n"
     "- Explore o alvo com http_request: pagina inicial, formularios, parametros, rotas.\n"
     "- Para login, a vulnerabilidade provavel e SQL injection. A query do servidor "
     "costuma ser: WHERE username='<input>' AND password='<input>'. Para burlar, seu "
@@ -79,6 +82,23 @@ SYSTEM = (
     "    ?name={{config}}         (vaza o objeto de config do app — costuma ter a flag)\n"
     "    ?name={{config['FLAG']}} (le um campo direto do config)\n"
     "  O objeto `config` (estilo Flask) geralmente carrega segredos e a flag.\n"
+    "- COOKIE TAMPERING: se o servidor manda um cookie de sessao (header Set-Cookie, "
+    "ex: sess=...) que e apenas base64 de um JSON SEM assinatura, voce controla a "
+    "sessao. Faca: (1) pegue o valor do cookie na resposta; (2) use b64_decode para "
+    "ver o JSON (campos como role); (3) edite role para 'admin' e use b64_encode no "
+    "JSON novo; (4) refaca a requisicao a area restrita passando "
+    "headers={'Cookie': 'sess=<valor_b64_forjado>'}. Como nao ha assinatura, o "
+    "servidor confia no cookie adulterado.\n"
+    "- OPEN REDIRECT + SSRF: um servico de preview/fetch busca URLs NO SERVIDOR, mas "
+    "so aceita uma allowlist (ex: alvos /public ou /go do host publico). A flag fica "
+    "num host INTERNO (ex: http://127.0.0.2:PORT/flag) que VOCE nao alcanca direto "
+    "(o lab bloqueia: 'host bloqueado pela allowlist'). Existe um open redirect "
+    "(/go?to=...) na allowlist. ENCADEIE: peca ao preview um alvo PERMITIDO (/go) que "
+    "redireciona pro host interno — o fetcher do SERVIDOR segue o redirect e vaza a "
+    "flag. Pedir /go direto NAO funciona (seu cliente tambem respeita a allowlist no "
+    "redirect). Monte assim (URL-encode o target inteiro):\n"
+    "    /preview?target=http://127.0.0.1:PORT/go?to=http://127.0.0.2:PORT/flag\n"
+    "  A pagina inicial diz o endereco exato do recurso interno e os caminhos aceitos.\n"
     "- Leia a pagina inicial em busca de DICAS: credenciais de demonstracao "
     "(ex: 'guest / guest') costumam estar escritas no HTML. Use-as para logar.\n"
     "- IDOR exige ORDEM: (1) primeiro faca login de verdade com credenciais validas "
@@ -172,6 +192,8 @@ def run_agent(
             preview = (
                 result.get("body")
                 or result.get("token")
+                or result.get("decoded")
+                or result.get("encoded")
                 or result.get("payload")
                 or result.get("message")
                 or result.get("error", "")

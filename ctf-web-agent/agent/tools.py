@@ -54,14 +54,33 @@ def http_request(
             "hosts_permitidos": sorted(ctx.allowed_hosts),
         }
     try:
+        # Segue redirects MANUALMENTE, revalidando o allowlist a cada salto. Isso
+        # imita uma defesa anti-SSRF de verdade: um open redirect nao basta para
+        # alcancar um host bloqueado pelo cliente.
         resp = ctx.session.request(
             method.upper(),
             url,
             data=data or None,
             headers=headers or None,
             timeout=15,
-            allow_redirects=True,
+            allow_redirects=False,
         )
+        hops = 0
+        while resp.is_redirect and hops < 5:
+            nxt = requests.compat.urljoin(resp.url, resp.headers.get("Location", ""))
+            if not _host_allowed(nxt, ctx.allowed_hosts):
+                return {
+                    "status": resp.status_code,
+                    "url_final": resp.url,
+                    "redirect_bloqueado": nxt,
+                    "body": (
+                        f"redirect para '{nxt}', cujo host esta FORA do allowlist do "
+                        "laboratorio — nao seguido. (Seu proprio cliente nao alcanca "
+                        "hosts internos so por causa de um open redirect.)"
+                    ),
+                }
+            resp = ctx.session.request("GET", nxt, timeout=15, allow_redirects=False)
+            hops += 1
     except requests.RequestException as exc:
         return {"error": f"falha na requisicao: {exc}"}
 
@@ -99,6 +118,22 @@ def submit_flag(ctx: ToolContext, flag: str = "") -> dict:
         }
     ctx.found_flag = candidate
     return {"ok": True, "message": "flag registrada"}
+
+
+def b64_decode(ctx: ToolContext, text: str = "") -> dict:
+    """Decodifica base64/base64url (tolera falta de padding). Util para inspecionar
+    cookies de sessao e outros valores codificados."""
+    try:
+        raw = _b64url_dec((text or "").strip())
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"falha ao decodificar base64: {exc}"}
+    return {"decoded": raw.decode("utf-8", "replace")}
+
+
+def b64_encode(ctx: ToolContext, text: str = "") -> dict:
+    """Codifica um texto em base64url (sem padding). Util para reempacotar um
+    cookie/sessao depois de adultera-lo."""
+    return {"encoded": _b64url((text or "").encode("utf-8"))}
 
 
 def jwt_decode(ctx: ToolContext, token: str = "") -> dict:
@@ -159,6 +194,36 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "b64_decode",
+            "description": (
+                "Decodifica um valor base64/base64url para texto. Use para "
+                "inspecionar o conteudo de um cookie de sessao ou token codificado."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"text": {"type": "string", "description": "o valor base64"}},
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "b64_encode",
+            "description": (
+                "Codifica um texto em base64url (sem padding). Use para reempacotar "
+                "um cookie/sessao depois de editar (ex: trocar role para admin)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"text": {"type": "string", "description": "o texto a codificar"}},
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "jwt_decode",
             "description": (
                 "Decodifica um token JWT (sem verificar assinatura) e mostra o "
@@ -211,6 +276,8 @@ TOOL_SCHEMAS = [
 # Quais argumentos cada ferramenta aceita (filtra kwargs inesperados do modelo).
 _ALLOWED_ARGS = {
     "http_request": {"method", "url", "data", "headers"},
+    "b64_decode": {"text"},
+    "b64_encode": {"text"},
     "jwt_decode": {"token"},
     "jwt_forge": {"payload", "alg"},
     "submit_flag": {"flag"},
@@ -221,6 +288,8 @@ def dispatch(ctx: ToolContext, name: str, args: dict) -> dict:
     """Executa a ferramenta pelo nome, filtrando argumentos validos."""
     fns = {
         "http_request": http_request,
+        "b64_decode": b64_decode,
+        "b64_encode": b64_encode,
         "jwt_decode": jwt_decode,
         "jwt_forge": jwt_forge,
         "submit_flag": submit_flag,
