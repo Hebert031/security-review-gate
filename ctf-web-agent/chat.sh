@@ -10,9 +10,10 @@ HOST="${OLLAMA_HOST:-$FILE_HOST}"
 MODEL="${OLLAMA_MODEL:-glm-4.7-flash:latest}"
 PROMPT="${*:-Diga ola em uma frase.}"
 
-# Token Bearer opcional (pod protegido pelo proteger.sh). Sem ele, sem header.
+# Token Bearer: env OLLAMA_TOKEN > arquivo secrets/ollama_token (gitignored) > nenhum.
+TOKEN="${OLLAMA_TOKEN:-$(cat secrets/ollama_token 2>/dev/null || true)}"
 AUTH=()
-[[ -n "${OLLAMA_TOKEN:-}" ]] && AUTH=(-H "Authorization: Bearer ${OLLAMA_TOKEN}")
+[[ -n "$TOKEN" ]] && AUTH=(-H "Authorization: Bearer ${TOKEN}")
 
 curl -s -m 120 "${AUTH[@]}" "$HOST/api/chat" -d "$(jq -n \
   --arg m "$MODEL" --arg p "$PROMPT" \

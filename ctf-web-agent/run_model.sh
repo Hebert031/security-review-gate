@@ -31,8 +31,9 @@ esac
 ENVS=(-e OLLAMA_HOST="$HOST" -e MODEL="$MODEL")
 [[ -n "${ONLY:-}" ]]         && ENVS+=(-e ONLY="$ONLY")
 [[ -n "${ATTEMPTS:-}" ]]     && ENVS+=(-e ATTEMPTS="$ATTEMPTS")
-# Token Bearer (pod protegido pelo proteger.sh). Sem ele, nada muda.
-[[ -n "${OLLAMA_TOKEN:-}" ]] && ENVS+=(-e OLLAMA_TOKEN="$OLLAMA_TOKEN")
+# Token Bearer: env OLLAMA_TOKEN > arquivo secrets/ollama_token (gitignored).
+TOKEN="${OLLAMA_TOKEN:-$(cat secrets/ollama_token 2>/dev/null || true)}"
+[[ -n "$TOKEN" ]] && ENVS+=(-e OLLAMA_TOKEN="$TOKEN")
 
 echo "▶ backend=$BACKEND  host=$HOST  model=$MODEL  only=${ONLY:-todos}  attempts=${ATTEMPTS:-2}"
 exec docker compose run --rm "${DEPS[@]}" "${ENVS[@]}" agent
