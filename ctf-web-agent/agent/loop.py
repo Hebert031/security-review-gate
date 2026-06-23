@@ -10,6 +10,7 @@ from typing import Callable
 
 import requests
 
+from . import ui
 from .llm import LLMClient
 from .tools import ToolContext, TOOL_SCHEMAS, dispatch
 
@@ -23,11 +24,12 @@ def _chat_with_retry(llm: LLMClient, messages: list[dict], on_event: Callable[[s
     modelo degenera numa geracao longa). Reerguer a excecao so apos esgotar."""
     for attempt in range(1, CHAT_RETRIES + 1):
         try:
-            return llm.chat(messages, TOOL_SCHEMAS)
+            with ui.Spinner("consultando o modelo…"):
+                return llm.chat(messages, TOOL_SCHEMAS)
         except requests.RequestException as exc:
             if attempt >= CHAT_RETRIES:
                 raise
-            on_event(f"\n⚠️  modelo nao respondeu ({type(exc).__name__}); tentando de novo...")
+            on_event(ui.warn(f"modelo nao respondeu ({type(exc).__name__}); tentando de novo..."))
 
 
 @dataclass
@@ -176,11 +178,11 @@ def run_agent(
         except requests.RequestException as exc:
             # Timeout/erro de rede persistente no LLM: aborta SO esta tentativa
             # (a gincana segue; o ATTEMPTS do placar ainda da nova chance ao nivel).
-            on_event(f"\n⚠️  modelo indisponivel ({type(exc).__name__}); abortando a tentativa.")
+            on_event(ui.warn(f"modelo indisponivel ({type(exc).__name__}); abortando a tentativa."))
             return AgentResult(success=False, flag=None, steps=step)
 
         if resp.content.strip():
-            on_event(f"\n[passo {step}] 🤔 {resp.content.strip()}")
+            on_event(ui.step(step, resp.content.strip()))
 
         assistant_msg: dict = {"role": "assistant", "content": resp.content}
         if resp.tool_calls:
@@ -195,7 +197,7 @@ def run_agent(
             # Aborta cedo em vez de queimar todos os passos a toa.
             stalls += 1
             if stalls >= STALL_LIMIT:
-                on_event("\n⚠️  agente travou (varios passos sem acao); abortando a tentativa.")
+                on_event(ui.warn("agente travou (varios passos sem acao); abortando a tentativa."))
                 return AgentResult(success=False, flag=None, steps=step)
             messages.append(
                 {
@@ -208,7 +210,7 @@ def run_agent(
         stalls = 0
         for tc in resp.tool_calls:
             name, args = tc["name"], tc["arguments"]
-            on_event(f"   ⚙️  {name}({_fmt_args(args)})")
+            on_event(ui.tool_call(name, _fmt_args(args)))
             result = dispatch(ctx, name, args)
             preview = (
                 result.get("body")
@@ -219,12 +221,12 @@ def run_agent(
                 or result.get("message")
                 or result.get("error", "")
             )
-            on_event(f"      ↳ {str(preview)[:160].replace(chr(10), ' ')}")
+            on_event(ui.tool_result(str(preview)[:160].replace(chr(10), " ")))
             messages.append({"role": "tool", "content": _to_tool_content(result)})
 
             if name == "submit_flag" and ctx.found_flag:
-                on_event(f"\n🏁 FLAG CAPTURADA: {ctx.found_flag}  (em {step} passos)")
+                on_event(ui.flag_capture(ctx.found_flag, step))
                 return AgentResult(success=True, flag=ctx.found_flag, steps=step)
 
-    on_event("\n❌ Limite de passos atingido sem capturar a flag.")
+    on_event(ui.color("\n❌ Limite de passos atingido sem capturar a flag.", ui.RED))
     return AgentResult(success=False, flag=None, steps=max_steps)

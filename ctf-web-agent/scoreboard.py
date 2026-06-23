@@ -17,6 +17,7 @@ import requests
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
+from agent import ui  # noqa: E402
 from agent.llm import OllamaClient  # noqa: E402
 from agent.loop import AgentResult, run_agent  # noqa: E402
 
@@ -184,8 +185,7 @@ def run_challenge(llm: OllamaClient, ch: dict) -> dict:
         started = time.time()
         last = None
         for attempt in range(1, ATTEMPTS + 1):
-            suffix = "" if ATTEMPTS == 1 else f"  (tentativa {attempt}/{ATTEMPTS})"
-            print(f"\n{'='*64}\n🎯 {ch['nome']}  ({base}){suffix}\n{'='*64}")
+            print(ui.level_header(ch["nome"], base, attempt, ATTEMPTS))
             try:
                 last = run_agent(llm, base, allowed_hosts={"127.0.0.1", "localhost"}, max_steps=MAX_STEPS)
             except Exception as exc:  # robustez: um nivel nunca derruba a gincana inteira
@@ -204,15 +204,26 @@ def run_challenge(llm: OllamaClient, ch: dict) -> dict:
 
 
 def print_scoreboard(rows: list[dict], repeat: int) -> None:
-    print(f"\n\n{'='*64}\n🏆 PLACAR FINAL\n{'='*64}")
+    print(f"\n\n{ui.color('='*64, ui.CYAN)}")
+    print(ui.color("🏆 PLACAR FINAL", ui.BOLD, ui.YELLOW))
+    print(ui.color("=" * 64, ui.CYAN))
     if repeat == 1:
-        print(f"{'Desafio':<28}{'Status':<12}{'Passos':>8}{'Tempo':>10}")
+        tmax = max((r["tempo_medio"] for r in rows), default=0.0)
+        print(ui.color(f"{'Desafio':<28}{'Status':<11}{'Passos':>7}  {'Tempo':>7}  Grafico", ui.DIM))
         print("-" * 64)
         for r in rows:
-            status = "✅ flag!" if r["sucessos"] else "❌ falhou"
-            print(f"{r['nome']:<28}{status:<12}{r['passos_medio']:>8.0f}{r['tempo_medio']:>9.1f}s")
+            if r["sucessos"]:
+                status = ui.color("✅ flag!", ui.GREEN)
+                graf = ui.bar(r["tempo_medio"], tmax)
+            else:
+                status = ui.color("❌ falhou", ui.RED)
+                graf = ""
+            nome = ui.color(f"{r['nome']:<28}", ui.BOLD)
+            print(f"{nome}{status:<20}{r['passos_medio']:>5.0f}  {r['tempo_medio']:>6.1f}s  {graf}")
         print("-" * 64)
-        print(f"Resolvidos: {sum(r['sucessos'] for r in rows)}/{len(rows)}")
+        total = sum(r["sucessos"] for r in rows)
+        cor = ui.GREEN if total == len(rows) else ui.YELLOW
+        print(ui.color(f"Resolvidos: {total}/{len(rows)}", ui.BOLD, cor))
     else:
         print(f"{'Desafio':<28}{'Acertos':>10}{'Taxa':>8}{'Passos*':>9}{'Tempo*':>9}")
         print("-" * 64)
@@ -238,7 +249,7 @@ def main() -> None:
     model = os.environ.get("MODEL", "qwen2.5:7b-instruct")
     repeat = int(os.environ.get("REPEAT", "1"))
     llm = OllamaClient(model=model)
-    print(f"🧠 modelo: {model} @ {llm.host}  |  repeticoes: {repeat}")
+    print(ui.banner(model, llm.host, repeat))
     llm.wait_until_ready()
     llm.ensure_model()
 

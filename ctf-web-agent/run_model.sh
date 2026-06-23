@@ -35,5 +35,11 @@ ENVS=(-e OLLAMA_HOST="$HOST" -e MODEL="$MODEL")
 TOKEN="${OLLAMA_TOKEN:-$(cat secrets/ollama_token 2>/dev/null || true)}"
 [[ -n "$TOKEN" ]] && ENVS+=(-e OLLAMA_TOKEN="$TOKEN")
 
+# TTY: se a saida deste script NAO e um terminal (pipe/arquivo), desliga o TTY do
+# docker e forca NO_COLOR -> a UI cai para texto limpo (logs/greps intactos).
+# Num terminal de verdade, mantem o TTY e os efeitos animados ligam sozinhos.
+TTY=()
+if [[ ! -t 1 ]]; then TTY=(-T); ENVS+=(-e NO_COLOR=1); fi
+
 echo "▶ backend=$BACKEND  host=$HOST  model=$MODEL  only=${ONLY:-todos}  attempts=${ATTEMPTS:-2}"
-exec docker compose run --rm "${DEPS[@]}" "${ENVS[@]}" agent
+exec docker compose run --rm "${TTY[@]}" "${DEPS[@]}" "${ENVS[@]}" agent
