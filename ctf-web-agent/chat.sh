@@ -10,7 +10,11 @@ HOST="${OLLAMA_HOST:-$FILE_HOST}"
 MODEL="${OLLAMA_MODEL:-glm-4.7-flash:latest}"
 PROMPT="${*:-Diga ola em uma frase.}"
 
-curl -s -m 120 "$HOST/api/chat" -d "$(jq -n \
+# Token Bearer opcional (pod protegido pelo proteger.sh). Sem ele, sem header.
+AUTH=()
+[[ -n "${OLLAMA_TOKEN:-}" ]] && AUTH=(-H "Authorization: Bearer ${OLLAMA_TOKEN}")
+
+curl -s -m 120 "${AUTH[@]}" "$HOST/api/chat" -d "$(jq -n \
   --arg m "$MODEL" --arg p "$PROMPT" \
   '{model:$m, stream:false, messages:[{role:"user", content:$p}]}')" \
   | jq -r '.message.content'

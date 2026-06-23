@@ -29,8 +29,10 @@ case "$BACKEND" in
 esac
 
 ENVS=(-e OLLAMA_HOST="$HOST" -e MODEL="$MODEL")
-[[ -n "${ONLY:-}" ]]     && ENVS+=(-e ONLY="$ONLY")
-[[ -n "${ATTEMPTS:-}" ]] && ENVS+=(-e ATTEMPTS="$ATTEMPTS")
+[[ -n "${ONLY:-}" ]]         && ENVS+=(-e ONLY="$ONLY")
+[[ -n "${ATTEMPTS:-}" ]]     && ENVS+=(-e ATTEMPTS="$ATTEMPTS")
+# Token Bearer (pod protegido pelo proteger.sh). Sem ele, nada muda.
+[[ -n "${OLLAMA_TOKEN:-}" ]] && ENVS+=(-e OLLAMA_TOKEN="$OLLAMA_TOKEN")
 
 echo "▶ backend=$BACKEND  host=$HOST  model=$MODEL  only=${ONLY:-todos}  attempts=${ATTEMPTS:-2}"
 exec docker compose run --rm "${DEPS[@]}" "${ENVS[@]}" agent

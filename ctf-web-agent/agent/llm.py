@@ -37,17 +37,24 @@ class OllamaClient:
         host: str | None = None,
         timeout: int = 180,
         temperature: float = 0.2,
+        token: str | None = None,
     ) -> None:
         self.model = model
         self.host = (host or DEFAULT_HOST).rstrip("/")
         self.timeout = timeout
         self.temperature = temperature
+        # Token Bearer opcional (ex: Ollama protegido por Caddy no RunPod).
+        # Se vazio, nada muda — requisicoes seguem sem auth.
+        self.token = token if token is not None else os.environ.get("OLLAMA_TOKEN", "")
+
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {self.token}"} if self.token else {}
 
     def wait_until_ready(self, attempts: int = 60, delay: float = 2.0) -> None:
         """Espera o servidor Ollama responder (util ao subir junto no compose)."""
         for i in range(attempts):
             try:
-                requests.get(f"{self.host}/api/tags", timeout=5).raise_for_status()
+                requests.get(f"{self.host}/api/tags", headers=self._headers(), timeout=5).raise_for_status()
                 return
             except requests.RequestException:
                 if i == 0:
@@ -57,13 +64,14 @@ class OllamaClient:
 
     def ensure_model(self) -> None:
         """Garante que o modelo esta baixado; puxa via /api/pull se faltar."""
-        tags = requests.get(f"{self.host}/api/tags", timeout=10).json().get("models", [])
+        tags = requests.get(f"{self.host}/api/tags", headers=self._headers(), timeout=10).json().get("models", [])
         if any(m.get("name", "").startswith(self.model) for m in tags):
             return
         print(f"⬇️  baixando modelo {self.model} (so na primeira vez)...")
         with requests.post(
             f"{self.host}/api/pull",
             json={"model": self.model, "stream": True},
+            headers=self._headers(),
             stream=True,
             timeout=None,
         ) as resp:
@@ -87,6 +95,7 @@ class OllamaClient:
                 "stream": False,
                 "options": {"temperature": self.temperature},
             },
+            headers=self._headers(),
             timeout=self.timeout,
         )
         resp.raise_for_status()
