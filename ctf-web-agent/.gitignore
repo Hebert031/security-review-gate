@@ -5,3 +5,11 @@ __pycache__/
 # Segredos locais — NUNCA versionar (token do pod protegido, etc.)
 secrets/
 .ollama_token
+
+# Scripts auxiliares gerados localmente que embutem o token/chave do pod
+# (rodados no pod via copia/colagem) — NUNCA versionar.
+add_ssh_key_pod.sh
+curl_teste.sh
+fix_caddy_pod.sh
+pod_fix_host.sh
+pod_setup.sh

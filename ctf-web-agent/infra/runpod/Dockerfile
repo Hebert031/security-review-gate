@@ -1,9 +1,10 @@
-# Template RunPod: Ollama (GPU NVIDIA) + gate de token Bearer via Caddy.
+# Template RunPod: Ollama (GPU NVIDIA) + gate de token via Caddy (header X-Ollama-Token).
 #
 # Base = imagem oficial do Ollama (ja traz o runtime CUDA; usa a GPU do pod
 # automaticamente quando ha uma). Em cima dela instalamos o Caddy e trocamos o
 # entrypoint para: subir o Ollama interno, baixar o(s) modelo(s) e expor so a
-# porta 8080 protegida por Authorization: Bearer <token>.
+# porta 8080 protegida pelo header X-Ollama-Token (o proxy do RunPod derruba
+# Authorization, por isso header proprio).
 FROM ollama/ollama:latest
 
 # Caddy + utilitarios (curl/openssl ja ajudam no entrypoint).
