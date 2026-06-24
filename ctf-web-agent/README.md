@@ -19,15 +19,21 @@ Claude/Qwen (cérebro)  →  http_request() / submit_flag()  →  alvo local vul
 - `agent/llm.py` — camada de LLM **trocável** (Ollama local **ou remoto**;
   suporta token Bearer via `OLLAMA_TOKEN`).
 - `agent/tools.py` — ferramentas (`http_request` com `data`/`headers`/`body`
-  cru/`files` multipart, `b64_decode`, `b64_encode`, `jwt_decode`, `jwt_forge`
-  (none/HS256), `jwt_crack`, `submit_flag`) + guarda de allowlist (host fora da
-  lista = bloqueado).
+  cru/`files` multipart, `playbook` (receita tática sob demanda), `b64_decode`,
+  `b64_encode`, `jwt_decode`, `jwt_forge` (none/HS256), `jwt_crack`,
+  `submit_flag`) + guarda de allowlist (host fora da lista = bloqueado).
+- `agent/playbooks.py` — conhecimento tático **modular**: `SIGNALS` (mapa
+  sintoma→técnica, sempre no prompt) + `PLAYBOOKS` (receita concreta por técnica,
+  entregue **sob demanda** pela tool `playbook`). Mantém o system prompt enxuto e
+  a iteração fácil — ajustar uma técnica é editar uma entrada.
 - `agent/loop.py` — loop ReAct que liga cérebro e ferramentas.
-- `targets/` — **22 desafios** vulneráveis de propósito (SQLi, IDOR, SSRF, cmd
+- `targets/` — **27 desafios** vulneráveis de propósito (SQLi, IDOR, SSRF, cmd
   injection, LFI, JWT, SSTI, cookie tampering, open redirect+SSRF, mass
   assignment, verb tampering, XFF/Host spoof, file exposure, basic auth,
   business logic, verbose error, NoSQLi, GraphQL, JWT HMAC fraco, XXE,
-  upload→RCE). Detalhamento técnico de cada um em **`docs/ATAQUES.md`**.
+  upload→RCE, reflected XSS, insecure deserialization, CORS misconfig, CRLF
+  injection, path normalization bypass). Detalhamento técnico de cada um em
+  **`docs/ATAQUES.md`**.
 - `scoreboard.py` — sobe a gincana inteira, cronometra cada nível e ranqueia.
 - `run.py` — lança o agente contra um alvo.
 - `smoke_test.py` / `smoke_new.py` — validam alvos + ferramentas **sem LLM**.
@@ -64,7 +70,7 @@ Pré-requisitos: **Ollama** + Python 3.11 com `requests`.
 ```bash
 # instala o Ollama e baixa um modelo bom em tool calling
 curl -fsSL https://ollama.com/install.sh | sh
-ollama pull qwen2.5:7b-instruct
+ollama pull qwen2.5:3b-instruct
 
 # 1) valida a fundação — NÃO precisa de Ollama
 python3 smoke_test.py
@@ -82,7 +88,7 @@ python3 run.py --target http://127.0.0.1:8000 \
 | Flag | Padrão | Para quê |
 |---|---|---|
 | `--target` | `http://127.0.0.1:8000` | URL do desafio |
-| `--model` | `qwen2.5:7b-instruct` | modelo do Ollama |
+| `--model` | `qwen2.5:3b-instruct` | modelo do Ollama |
 | `--ollama-host` | `http://localhost:11434` | onde o Ollama está |
 | `--max-steps` | `15` | teto de ações do agente |
 | `--no-pull` | — | não baixar o modelo se faltar |
@@ -90,11 +96,11 @@ python3 run.py --target http://127.0.0.1:8000 \
 
 ## Gincana completa (placar)
 
-Sobe os 22 alvos como subprocessos locais e ranqueia a IA por passos e tempo.
+Sobe os 27 alvos como subprocessos locais e ranqueia a IA por passos e tempo.
 Só o Ollama precisa estar de pé.
 
 ```bash
-python3 scoreboard.py                 # roda os 22 níveis
+python3 scoreboard.py                 # roda os 27 níveis
 ONLY=4 python3 scoreboard.py          # só o nível 4
 ONLY=10,15,20 python3 scoreboard.py   # níveis selecionados
 REPEAT=3 python3 scoreboard.py        # 3 tentativas por nível, mede a taxa de acerto
@@ -152,6 +158,12 @@ Passo a passo de build/push e configuração do template: **`infra/runpod/README
 - [x] Nível 20 — JWT HMAC fraco (`jwt_crack` → forja HS256)
 - [x] Nível 21 — XXE (entidade externa `file:///flag`)
 - [x] Nível 22 — Upload irrestrito → RCE
+- [x] Nível 23 — Reflected XSS (vetor de script refletido sem escape)
+- [x] Nível 24 — Insecure deserialization (`eval` sobre cookie do cliente)
+- [x] Nível 25 — CORS misconfig (`Origin` refletido + credenciais)
+- [x] Nível 26 — CRLF / HTTP header injection (`%0d%0a` no `Location`)
+- [x] Nível 27 — Auth bypass por normalização de path (`/admin/`, `/%2e/admin`)
+- [x] Playbooks táticos modulares (`SIGNALS` + tool `playbook` sob demanda)
 - [x] Placar / cronômetro (quantos passos a IA levou)
 - [x] Backend remoto (RunPod) + token Bearer + template Docker
 - [ ] Arena de modelos (3B vs 7B vs 14B lado a lado)

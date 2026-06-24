@@ -17,6 +17,8 @@ from urllib.parse import urlparse
 
 import requests
 
+from . import playbooks
+
 FLAG_RE = re.compile(r"flag\{[^}]{1,200}\}", re.I)
 
 
@@ -139,6 +141,19 @@ def submit_flag(ctx: ToolContext, flag: str = "") -> dict:
     return {"ok": True, "message": "flag registrada"}
 
 
+def playbook(ctx: ToolContext, technique: str = "") -> dict:
+    """Devolve a receita CONCRETA de uma tecnica (payloads, como provar, como
+    escalar). So retorna conhecimento de laboratorio — nao toca em rede nem executa
+    nada — entao e seguro. Use depois de RECONHECER a tecnica pelos SINAIS do alvo."""
+    canon = playbooks.resolve(technique)
+    if canon is None:
+        return {
+            "error": f"tecnica '{technique}' nao reconhecida",
+            "tecnicas_disponiveis": playbooks.available(),
+        }
+    return {"technique": canon, "playbook": playbooks.PLAYBOOKS[canon]}
+
+
 def b64_decode(ctx: ToolContext, text: str = "") -> dict:
     """Decodifica base64/base64url (tolera falta de padding). Util para inspecionar
     cookies de sessao e outros valores codificados."""
@@ -259,6 +274,28 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "playbook",
+            "description": (
+                "Devolve a receita concreta (payloads, como provar e como escalar) de "
+                "uma tecnica de ataque. Use APOS reconhecer a tecnica pelos SINAIS do "
+                "alvo: ex. playbook('sqli'), playbook('xss'), playbook('cors'). Se nao "
+                "souber qual pedir, chame com uma tecnica qualquer pra ver a lista."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "technique": {
+                        "type": "string",
+                        "description": "nome da tecnica, ex: 'sqli', 'idor', 'jwt_hmac', 'xxe', 'cors'",
+                    }
+                },
+                "required": ["technique"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "b64_decode",
             "description": (
                 "Decodifica um valor base64/base64url para texto. Use para "
@@ -369,6 +406,7 @@ TOOL_SCHEMAS = [
 # Quais argumentos cada ferramenta aceita (filtra kwargs inesperados do modelo).
 _ALLOWED_ARGS = {
     "http_request": {"method", "url", "data", "headers", "body", "files"},
+    "playbook": {"technique"},
     "b64_decode": {"text"},
     "b64_encode": {"text"},
     "jwt_decode": {"token"},
@@ -382,6 +420,7 @@ def dispatch(ctx: ToolContext, name: str, args: dict) -> dict:
     """Executa a ferramenta pelo nome, filtrando argumentos validos."""
     fns = {
         "http_request": http_request,
+        "playbook": playbook,
         "b64_decode": b64_decode,
         "b64_encode": b64_encode,
         "jwt_decode": jwt_decode,
