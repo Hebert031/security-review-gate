@@ -48,7 +48,10 @@ class OllamaClient:
         self.token = token if token is not None else os.environ.get("OLLAMA_TOKEN", "")
 
     def _headers(self) -> dict:
-        return {"Authorization": f"Bearer {self.token}"} if self.token else {}
+        # Header CUSTOMIZADO (nao 'Authorization'): o proxy do RunPod intercepta
+        # o header Authorization e rejeita o Bearer com 403 antes de chegar no pod.
+        # Um header proprio passa intacto ate o gate Caddy. Veja proteger.sh.
+        return {"X-Ollama-Token": self.token} if self.token else {}
 
     def wait_until_ready(self, attempts: int = 60, delay: float = 2.0) -> None:
         """Espera o servidor Ollama responder (util ao subir junto no compose)."""

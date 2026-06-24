@@ -11,6 +11,7 @@ A licao: nunca deixar a entrada do usuario virar operador da query; force tipos
 (senha tem que ser string) e use queries parametrizadas.
 """
 
+import json
 import os
 import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -63,8 +64,10 @@ HOME = """<!doctype html><html lang="pt-br"><body>
   <button>Entrar</button>
 </form>
 <p><i>Nota do dev (nao remover): o /login monta a query do Mongo direto a partir
-dos campos do form (TODO: forcar tipos / nao aceitar operadores do cliente).
-Operadores como <code>$ne</code> sao interpretados.</i></p>
+da requisicao (TODO: forcar tipos / nao aceitar operadores do cliente). Aceita
+JSON e form. Operadores como <code>$ne</code> sao interpretados, ex.:
+<code>{"username":"admin","password":{"$ne":"x"}}</code> (Content-Type
+application/json) ou <code>username=admin&amp;password[$ne]=x</code>.</i></p>
 </body></html>"""
 
 
@@ -90,9 +93,23 @@ class Handler(BaseHTTPRequestHandler):
         if urlparse(self.path).path != "/login":
             self._send(404, "<h1>404 — nao encontrado</h1>")
             return
-        length = int(self.headers.get("Content-Length", 0))
-        form = parse_qs(self.rfile.read(length).decode("utf-8"))
-        user = match_user(parse_query(form))
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        raw = self.rfile.read(length).decode("utf-8", "replace")
+        ctype = self.headers.get("Content-Type", "").lower()
+        # Aceita as DUAS formas do mesmo ataque:
+        #  - JSON: {"username":"admin","password":{"$ne":"x"}}  (operador aninhado)
+        #  - form: username=admin&password[$ne]=x              (operador na chave)
+        if "json" in ctype:
+            try:
+                query = json.loads(raw) if raw else {}
+            except json.JSONDecodeError:
+                self._send(200, "<p>JSON invalido.</p>")
+                return
+            if not isinstance(query, dict):
+                query = {}
+        else:
+            query = parse_query(parse_qs(raw))
+        user = match_user(query)
         if user and user.get("role") == "admin":
             self._send(200, f"<h1>Logado como {user['username']}</h1><p>{FLAG}</p>")
             return

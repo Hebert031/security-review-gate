@@ -21,7 +21,7 @@ RUNPOD_URL="${RUNPOD_URL:-$FILE_URL}"
 BACKEND="${1:-runpod}"
 case "$BACKEND" in
   local)
-    HOST="http://ollama:11434"; DEPS=();        MODEL="${MODEL:-qwen2.5:7b-instruct}" ;;
+    HOST="http://ollama:11434"; DEPS=();        MODEL="${MODEL:-qwen2.5:3b-instruct}" ;;
   runpod)
     HOST="$RUNPOD_URL";         DEPS=(--no-deps); MODEL="${MODEL:-glm-4.7-flash:latest}" ;;
   *)

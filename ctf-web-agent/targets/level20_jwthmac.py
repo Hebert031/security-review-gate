@@ -66,9 +66,11 @@ HOME = f"""<!doctype html><html lang="pt-br"><body>
 <p>Seu token de visitante (JWT, HS256):</p>
 <pre>{GUEST_TOKEN}</pre>
 <p>Envie-o em <code>Authorization: Bearer &lt;token&gt;</code> ao acessar <code>/admin</code>.</p>
-<p><i>Nota do dev (nao remover): validamos a assinatura HS256 direitinho. TODO:
-trocar o segredo de assinatura — ainda esta um valor curto/fraco de
-desenvolvimento. O /admin exige role=admin.</i></p>
+<p><i>Nota do dev (nao remover): validamos a assinatura HS256 direitinho
+(alg=none NAO cola aqui). TODO: trocar o segredo de assinatura — ainda esta um
+valor curto/fraco de desenvolvimento, da pra quebrar offline. O /admin exige
+role=admin. (fluxo: jwt_crack no token de visitante p/ achar o segredo, depois
+jwt_forge alg=HS256 com esse segredo criando role=admin.)</i></p>
 </body></html>"""
 
 

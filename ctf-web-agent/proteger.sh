@@ -39,10 +39,12 @@ echo "    (o Ollama padrao ja escuta em 127.0.0.1:${OLLAMA_PORT} — nao mexemos
 
 echo "==> Escrevendo Caddyfile (Caddy atende a porta ${PROXY_PORT})..."
 mkdir -p /etc/caddy
+# Gate por header CUSTOMIZADO X-Ollama-Token (NAO Authorization): o proxy do
+# RunPod intercepta o header Authorization e devolve 403 antes de chegar aqui.
 cat > /etc/caddy/Caddyfile <<EOF
 :${PROXY_PORT} {
     @noauth {
-        not header Authorization "Bearer ${TOKEN}"
+        not header X-Ollama-Token "${TOKEN}"
     }
     respond @noauth "Unauthorized" 401
 
@@ -60,7 +62,7 @@ echo "    Caddy rodando na porta ${PROXY_PORT}. Logs em /var/log/caddy.log"
 
 echo "==> Auto-teste dentro do pod..."
 echo -n "    sem token (quer 401): "; curl -s -o /dev/null -w "%{http_code}\n" "127.0.0.1:${PROXY_PORT}/api/tags"
-echo -n "    com token (quer 200): "; curl -s -o /dev/null -w "%{http_code}\n" "127.0.0.1:${PROXY_PORT}/api/tags" -H "Authorization: Bearer ${TOKEN}"
+echo -n "    com token (quer 200): "; curl -s -o /dev/null -w "%{http_code}\n" "127.0.0.1:${PROXY_PORT}/api/tags" -H "X-Ollama-Token: ${TOKEN}"
 
 echo
 echo "==============================================================="
@@ -71,7 +73,7 @@ echo "    (a 11434 exposta continua SEM token — tem que tirar)."
 echo
 echo " 2. Teste de fora do pod:"
 echo "    curl https://SEU_POD-${PROXY_PORT}.proxy.runpod.net/api/tags \\"
-echo "      -H \"Authorization: Bearer ${TOKEN}\""
+echo "      -H \"X-Ollama-Token: ${TOKEN}\""
 echo
 echo " 3. No agent (sua maquina):"
 echo "    ./endpoint.sh https://SEU_POD-${PROXY_PORT}.proxy.runpod.net"
